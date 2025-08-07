@@ -1,30 +1,13 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
 	"log"
 	"net"
 	"os"
+
+	"httpfromtcp/internal/request"
 )
-
-func getLinesChannel(conn net.Conn) <-chan string {
-	ch := make(chan string)
-	go func() {
-		defer conn.Close()
-		defer close(ch)
-
-		scanner := bufio.NewScanner(conn)
-		for scanner.Scan() {
-			ch <- scanner.Text()
-		}
-
-		if err := scanner.Err(); err != nil {
-			log.Printf("Error reading from connection: %v", err)
-		}
-	}()
-	return ch
-}
 
 func main() {
 	listener, err := net.Listen("tcp", ":42069")
@@ -44,11 +27,14 @@ func main() {
 		}
 
 		fmt.Println("Connection accepted at port 42069")
-		ch := getLinesChannel(conn)
 
-		for elem := range ch {
-			fmt.Println("read:", elem)
+		r, err := request.RequestFromReader(conn)
+		if err != nil {
+			log.Println("Error reading from connection: ", err)
+			continue
 		}
+		fmt.Println("Request line:")
+		fmt.Printf("- Method: %v\n- Target: %v\n- Version: %v\n", r.RequestLine.Method, r.RequestLine.RequestTarget, r.RequestLine.HttpVersion)
 
 		fmt.Println("The connection has been terminated")
 	}
