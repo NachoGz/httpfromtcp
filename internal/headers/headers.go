@@ -1,9 +1,9 @@
 package headers
 
 import (
-	"strings"
 	"bytes"
 	"fmt"
+	"strings"
 )
 
 type Headers map[string]string
@@ -12,10 +12,9 @@ func NewHeaders() Headers {
 	header := make(map[string]string)
 	return header
 }
-
+const CLRF = "\r\n"
 func (h Headers) Parse(data []byte) (n int, done bool, err error) {
-	idx := bytes.Index(data, []byte("\r\n"))
-	// fmt.Printf("%q\n", data)
+	idx := bytes.Index(data, []byte(CLRF))
 
 	if idx == -1 { // there is no CRLF
 		return 0, false, nil
@@ -35,20 +34,19 @@ func (h Headers) Parse(data []byte) (n int, done bool, err error) {
 	} else {
 		h[fieldName] = fieldValue
 	}
-
-	return len(data[:idx])+2, false, nil
+	return idx + 2, false, nil
 }
 
 func fieldLineFromString(str string) (fieldName string, fieldValue string, err error) {
 	fieldLineParts := strings.Split(str, ":")
 	fieldName = strings.TrimLeft(fieldLineParts[0], " ")
+
 	if err := isValidFieldName(fieldName); err != nil {
 		return "", "", err
 	}
 
 	fieldValue = strings.Join(fieldLineParts[1:], ":")
 	fieldValue = strings.Trim(fieldValue, " ")
-
 	if strings.Contains(fieldName, " ") {
 		return "", "", fmt.Errorf("error: there must be no spaces betwixt the colon and the field-name")
 	}
@@ -63,13 +61,14 @@ func isValidFieldName(str string) error {
 	const allowedSpecialCharacters = "!#$%&'*+-.^_`|~"
 
 	for _, c := range str {
-		isLetter := (c > 'A' && c < 'Z' ) || (c > 'a' && c < 'z' )
-		isNumber := c >= 0 && c <= 9
+		isLetter := (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')
+		isNumber := c >= '0' && c <= '9'
 		isSpecialCharacter := strings.ContainsRune(allowedSpecialCharacters, c)
 
 		if !isLetter && !isNumber && !isSpecialCharacter {
-			return fmt.Errorf("error: invalid character %q in the field name", c)
+			return fmt.Errorf("error: invalid character %q in the field name %v", c, str)
 		}
+
 	}
 
 	return nil
