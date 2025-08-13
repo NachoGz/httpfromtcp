@@ -37,6 +37,15 @@ func (h Headers) Parse(data []byte) (n int, done bool, err error) {
 	return idx + 2, false, nil
 }
 
+func (h Headers) Get(key string) (value string) {
+	lowercaseKey := strings.ToLower(key)
+
+	value, ok := h[lowercaseKey]
+	if !ok {
+		return ""
+	}
+	return value
+}
 func fieldLineFromString(str string) (fieldName string, fieldValue string, err error) {
 	fieldLineParts := strings.Split(str, ":")
 	fieldName = strings.TrimLeft(fieldLineParts[0], " ")
