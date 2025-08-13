@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 
 	"httpfromtcp/internal/headers"
@@ -13,6 +14,7 @@ type Request struct {
 	RequestLine RequestLine
 	ParserState int
 	Headers     headers.Headers
+	Body        []byte
 }
 
 type RequestLine struct {
@@ -25,6 +27,7 @@ const (
 	requestStateInitialized int = iota
 	requestStateDone
 	requestStateParsingHeaders
+	requestStateParsingBody
 )
 
 const bufferSize int = 8
@@ -42,10 +45,22 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 
 		if err != nil {
 			if err == io.EOF {
+				// if EOF is reached while parsing the body, ensure Content-Length has been satisfied
+				if req.ParserState == requestStateParsingBody {
+					if contentLengthStr, ok := req.Headers["content-length"]; ok {
+						contentLengthNumber, err := strconv.Atoi(contentLengthStr)
+						if err != nil {
+							return nil, fmt.Errorf("invalid Content-Length: %v", err)
+						}
+						if len(req.Body) < contentLengthNumber {
+							return nil, fmt.Errorf("unexpected EOF: body shorter than Content-Length header")
+						}
+					}
+				}
 				req.ParserState = requestStateDone
 				break
 			}
-			return nil, fmt.Errorf("error reading: %v\n", err)
+			return nil, fmt.Errorf("error reading: %v", err)
 		}
 		if bytesRead > 0 {
 			readToIndex += bytesRead
@@ -53,7 +68,7 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 			// parse from the buffer
 			parsedBytes, err := req.parse(buf[:readToIndex])
 			if err != nil {
-				return nil, fmt.Errorf("error parsing the request-line: %v\n", err)
+				return nil, fmt.Errorf("error parsing the request-line: %v", err)
 			}
 			if parsedBytes > 0 {
 				copy(buf, buf[parsedBytes:readToIndex])
@@ -82,7 +97,7 @@ func parseRequestLine(data []byte) (*RequestLine, int, error) {
 		return nil, 0, err
 	}
 
-	return requestLine, idx+2, nil
+	return requestLine, idx + 2, nil
 }
 
 func requestLineFromString(str string) (*RequestLine, error) {
@@ -104,10 +119,10 @@ func requestLineFromString(str string) (*RequestLine, error) {
 	// check HTTP-version
 	versionParts := strings.Split(version, "/")
 	if versionParts[0] != "HTTP" {
-		return nil, fmt.Errorf("Invalid HTTP version: %s", versionParts[0])
+		return nil, fmt.Errorf("invalid HTTP version: %s", versionParts[0])
 	}
 	if versionParts[1] != "1.1" {
-		return nil, fmt.Errorf("Invalid HTTP version: %s", versionParts[1])
+		return nil, fmt.Errorf("invalid HTTP version: %s", versionParts[1])
 	}
 
 	return &RequestLine{
@@ -151,10 +166,27 @@ func (r *Request) parseSingle(data []byte) (int, error) {
 			return 0, err
 		}
 		if done {
-			r.ParserState = requestStateDone
+			r.ParserState = requestStateParsingBody
 		}
 		return n, nil
+	case requestStateParsingBody:
+		contentLength, ok := r.Headers["content-length"]
+		if ok {
+			contentLengthNumber, err := strconv.Atoi(contentLength)
+			if err != nil {
+				return 0, err
+			}
+			r.Body = append(r.Body, data...)
+			if len(r.Body) > contentLengthNumber {
+				return 0, fmt.Errorf("error: the length of the body is greater than the Content-Length header")
+			} else if len(r.Body) == contentLengthNumber {
+				r.ParserState = requestStateDone
+			}
+		} else {
+			r.ParserState = requestStateDone
+		}
+		return len(data), nil
 	default:
-		return 0, fmt.Errorf("error unknown state: %v\n", r.ParserState)
+		return 0, fmt.Errorf("error unknown state: %v", r.ParserState)
 	}
 }
