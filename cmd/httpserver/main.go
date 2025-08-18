@@ -29,7 +29,7 @@ func handlerFunc(w io.Writer, req *request.Request) *server.HandlerError {
 	default:
 		w.Write([]byte("All good, frfr\n"))
 	}
-	return &server.HandlerError{StatusCode: response.StatusOK}
+	return nil
 }
 
 func main() {
