@@ -20,7 +20,7 @@ type HandlerError struct {
 type Handler func(w io.Writer, req *request.Request) *HandlerError
 
 type Server struct {
-	state    atomic.Bool // false: not started, true: started
+	started atomic.Bool // false: not started, true: started
 	listener net.Listener
 	handler Handler
 }
@@ -31,7 +31,7 @@ func NewServer(listener net.Listener, started bool, handler Handler) *Server {
 		handler: handler,
 	}
 
-	server.state.Store(started)
+	server.started.Store(started)
 	return server
 }
 
@@ -48,24 +48,20 @@ func Serve(port int, handler Handler) (*Server, error) {
 }
 
 func (s *Server) Close() error {
-	// Set state to false to signal shutdown
-	s.state.Store(false)
+	// Set started to false to signal shutdown
+	s.started.Store(false)
 	return s.listener.Close()
 }
 
 func (s *Server) listen() {
-	for s.state.Load() {
+	for s.started.Load() {
 		conn, err := s.listener.Accept()
-		if !s.state.Load() {
-			return
-		}
 		if err != nil {
-			if s.state.Load() {
-				log.Printf("Error accepting connection: %v", err)
-				continue
-			} else {
+			if !s.started.Load() {
 				return
 			}
+			log.Printf("Error accepting connection: %v", err)
+			continue
 		}
 		go s.handle(conn)
 	}
