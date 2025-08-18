@@ -3,10 +3,10 @@ package response
 import (
 	"fmt"
 	"io"
+	"log"
 	"strings"
 
 	"httpfromtcp/internal/headers"
-
 )
 
 type StatusCode int
@@ -26,7 +26,9 @@ func WriteStatusLine(w io.Writer, statusCode StatusCode) error {
 	case StatusInternalServerError:
 		w.Write([]byte("HTTP/1.1 500 Internal Server Error \r\n"))
 	default:
-		return fmt.Errorf("error: incorrect status code: %v", statusCode)
+		err := fmt.Errorf("error: incorrect status code: %v", statusCode)
+		log.Println(err)
+		return err
 	}
 	return nil
 }
@@ -50,6 +52,7 @@ func WriteHeaders(w io.Writer, headers headers.Headers) error {
 	}
 	_, err := w.Write([]byte("\r\n"))
 	if err != nil {
+		log.Printf("error writing headers: %v", err)
 		return err
 	}
 	return nil
