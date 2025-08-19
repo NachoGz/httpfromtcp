@@ -17,16 +17,26 @@ const (
 	StatusInternalServerError StatusCode = 500
 )
 
-func WriteStatusLine(w io.Writer, statusCode StatusCode) error {
+type Writer struct {
+	writer io.Writer
+}
+
+func NewWriter(writer io.Writer) *Writer {
+	return &Writer{
+		writer: writer,
+	}
+}
+
+func (w *Writer) WriteStatusLine(statusCode StatusCode) error {
 	switch statusCode {
 	case StatusOK:
-		w.Write([]byte("HTTP/1.1 200 OK \r\n"))
+		w.writer.Write([]byte("HTTP/1.1 200 OK \r\n"))
 	case StatusBadRequest:
-		w.Write([]byte("HTTP/1.1 400 Bad Request \r\n"))
+		w.writer.Write([]byte("HTTP/1.1 400 Bad Request \r\n"))
 	case StatusInternalServerError:
-		w.Write([]byte("HTTP/1.1 500 Internal Server Error \r\n"))
+		w.writer.Write([]byte("HTTP/1.1 500 Internal Server Error \r\n"))
 	default:
-		err := fmt.Errorf("error: incorrect status code: %v", statusCode)
+		err := fmt.Errorf("error: unrecognized status code: %v", statusCode)
 		log.Println(err)
 		return err
 	}
@@ -42,18 +52,27 @@ func GetDefaultHeaders(contentLen int) headers.Headers {
 	return headers
 }
 
-func WriteHeaders(w io.Writer, headers headers.Headers) error {
+func (w *Writer) WriteHeaders(headers headers.Headers) error {
+	data := []byte{}
 	for key, value := range headers {
-		header := fmt.Sprintf("%s: %s", strings.Title(key), value)
-		_, err := w.Write([]byte(fmt.Sprintf("%s\r\n", header)))
-		if err != nil {
-			return err
-		}
+		data = fmt.Appendf(data, "%s: %s\r\n", strings.Title(key), value)
 	}
-	_, err := w.Write([]byte("\r\n"))
+	data = fmt.Appendf(data, "\r\n")
+
+	_, err := w.writer.Write(data)
 	if err != nil {
 		log.Printf("error writing headers: %v", err)
 		return err
 	}
+
 	return nil
+}
+
+func (w *Writer) WriteBody(p []byte) (int, error) {
+	n, err := w.writer.Write(p)
+	if err != nil {
+		log.Printf("error writing body: %v", err)
+		return 0, err
+	}
+	return n, nil
 }
