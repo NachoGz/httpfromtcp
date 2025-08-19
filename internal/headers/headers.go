@@ -46,6 +46,13 @@ func (h Headers) Get(key string) (value string) {
 	}
 	return value
 }
+
+func (h Headers) Set(key, value string) {
+	lowercaseKey := strings.ToLower(key)
+
+	h[lowercaseKey] = value
+}
+
 func fieldLineFromString(str string) (fieldName string, fieldValue string, err error) {
 	fieldLineParts := strings.Split(str, ":")
 	fieldName = strings.TrimLeft(fieldLineParts[0], " ")
