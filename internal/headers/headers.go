@@ -28,12 +28,7 @@ func (h Headers) Parse(data []byte) (n int, done bool, err error) {
 		return 0, false, err
 	}
 
-	fieldName = strings.ToLower(fieldName)
-	if _, ok := h[fieldName]; ok {
-		h[fieldName] += ", " + fieldValue
-	} else {
-		h[fieldName] = fieldValue
-	}
+	h.Set(fieldName, fieldValue)
 	return idx + 2, false, nil
 }
 
@@ -49,8 +44,21 @@ func (h Headers) Get(key string) (value string) {
 
 func (h Headers) Set(key, value string) {
 	lowercaseKey := strings.ToLower(key)
+	if _, ok := h[key]; ok {
+		h[lowercaseKey] += ", " + value
+	} else {
+		h[lowercaseKey] = value
+	}
+}
 
+func (h Headers) Replace(key, value string) {
+	lowercaseKey := strings.ToLower(key)
 	h[lowercaseKey] = value
+}
+
+func (h Headers) Delete(key string) {
+	key = strings.ToLower(key)
+	delete(h, key)
 }
 
 func fieldLineFromString(str string) (fieldName string, fieldValue string, err error) {
