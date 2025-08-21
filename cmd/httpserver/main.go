@@ -4,7 +4,10 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
+	"net/http"
+	"fmt"
 
 	"httpfromtcp/internal/request"
 	"httpfromtcp/internal/response"
@@ -49,12 +52,37 @@ func writeResponse(w *response.Writer, statusCode response.StatusCode) {
 }
 
 func handlerFunc(w *response.Writer, req *request.Request)  {
-	switch req.RequestLine.RequestTarget {
-	case "/yourproblem":
+	if req.RequestLine.RequestTarget == "/yourproblem"{
 		writeResponse(w, response.StatusBadRequest)
-	case "/myproblem":
+	} else if req.RequestLine.RequestTarget == "/myproblem" {
 		writeResponse(w, response.StatusInternalServerError)
-	default:
+	} else if strings.HasPrefix(req.RequestLine.RequestTarget, "/httpbin/stream") {
+		target := req.RequestLine.RequestTarget
+		res, err := http.Get("https://httpbin.org/" + target[len("/httpbin/"):])
+		if err != nil {
+			writeResponse(w, response.StatusInternalServerError)
+		} else {
+			w.WriteStatusLine(response.StatusOK)
+
+			h := response.GetDefaultHeaders(int(res.ContentLength))
+			h.Delete("Content-Length")
+			h.Set("Transfer-Encoding", "chunked")
+			h.Replace("Content-Type", "text/plain")
+			w.WriteHeaders(h)
+			for {
+				data := make([]byte, 32)
+				n, err := res.Body.Read(data)
+				if err != nil {
+					break
+				}
+				w.WriteBody([]byte(fmt.Sprintf("%x\r\n", n)))
+				w.WriteBody(data[:n])
+				w.WriteBody([]byte("\r\n"))
+			}
+			w.WriteBody([]byte("0\r\n\r\n"))
+			return
+		}
+	} else {
 		writeResponse(w, response.StatusOK)
 	}
 }
