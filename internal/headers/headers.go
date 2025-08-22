@@ -33,9 +33,9 @@ func (h Headers) Parse(data []byte) (n int, done bool, err error) {
 }
 
 func (h Headers) Get(key string) (value string) {
-	lowercaseKey := strings.ToLower(key)
+	key = strings.ToLower(key)
 
-	value, ok := h[lowercaseKey]
+	value, ok := h[key]
 	if !ok {
 		return ""
 	}
@@ -43,17 +43,17 @@ func (h Headers) Get(key string) (value string) {
 }
 
 func (h Headers) Set(key, value string) {
-	lowercaseKey := strings.ToLower(key)
+	key = strings.ToLower(key)
 	if _, ok := h[key]; ok {
-		h[lowercaseKey] += ", " + value
+		h[key] += ", " + value
 	} else {
-		h[lowercaseKey] = value
+		h[key] = value
 	}
 }
 
 func (h Headers) Replace(key, value string) {
-	lowercaseKey := strings.ToLower(key)
-	h[lowercaseKey] = value
+	key = strings.ToLower(key)
+	h[key] = value
 }
 
 func (h Headers) Delete(key string) {
