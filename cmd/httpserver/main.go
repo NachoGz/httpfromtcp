@@ -1,14 +1,16 @@
 package main
 
 import (
+	"crypto/sha256"
+	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
-	"net/http"
-	"fmt"
 
+	"httpfromtcp/internal/headers"
 	"httpfromtcp/internal/request"
 	"httpfromtcp/internal/response"
 	"httpfromtcp/internal/server"
@@ -49,6 +51,8 @@ func writeResponse(w *response.Writer, statusCode response.StatusCode) {
 	w.WriteHeaders(h)
 	// write the response body from the handler's buffer to the connection
 	w.WriteBody([]byte(body))
+
+	w.WriteBody([]byte("\r\n"))
 }
 
 func handlerFunc(w *response.Writer, req *request.Request)  {
@@ -56,7 +60,7 @@ func handlerFunc(w *response.Writer, req *request.Request)  {
 		writeResponse(w, response.StatusBadRequest)
 	} else if req.RequestLine.RequestTarget == "/myproblem" {
 		writeResponse(w, response.StatusInternalServerError)
-	} else if strings.HasPrefix(req.RequestLine.RequestTarget, "/httpbin/stream") {
+	} else if strings.HasPrefix(req.RequestLine.RequestTarget, "/httpbin/") {
 		target := req.RequestLine.RequestTarget
 		res, err := http.Get("https://httpbin.org/" + target[len("/httpbin/"):])
 		if err != nil {
@@ -67,21 +71,47 @@ func handlerFunc(w *response.Writer, req *request.Request)  {
 			h := response.GetDefaultHeaders(int(res.ContentLength))
 			h.Delete("Content-Length")
 			h.Set("Transfer-Encoding", "chunked")
+			h.Set("Trailer", "X-Content-SHA256")
+			h.Set("Trailer", "X-Content-Length")
 			h.Replace("Content-Type", "text/plain")
 			w.WriteHeaders(h)
+			fullBody :=[]byte{}
 			for {
 				data := make([]byte, 32)
 				n, err := res.Body.Read(data)
 				if err != nil {
 					break
 				}
+				fullBody = append(fullBody, data[:n]...)
 				w.WriteBody([]byte(fmt.Sprintf("%x\r\n", n)))
 				w.WriteBody(data[:n])
 				w.WriteBody([]byte("\r\n"))
 			}
-			w.WriteBody([]byte("0\r\n\r\n"))
+			w.WriteBody([]byte("0\r\n"))
+			hash := sha256.Sum256(fullBody)
+			trailers := headers.NewHeaders()
+			trailers.Set("X-Content-SHA256", fmt.Sprintf("%x", hash))
+			trailers.Set("X-Content-Length", fmt.Sprintf("%d", len(fullBody)))
+			w.WriteHeaders(trailers)
+			w.WriteBody([]byte("\r\n"))
 			return
 		}
+	} else if req.RequestLine.RequestTarget == "/video" {
+		w.WriteStatusLine(response.StatusOK)
+		filepath := "assets/vim.mp4"
+		video, err := os.ReadFile(filepath)
+		if err != nil {
+			log.Printf("error reading file: %v", filepath)
+		}
+
+		h := response.GetDefaultHeaders(len(video))
+		h.Replace("Content-Type", "video/mp4")
+		w.WriteHeaders(h)
+		// write the response body from the handler's buffer to the connection
+		w.WriteBody(video)
+
+		w.WriteBody([]byte("\r\n"))
+
 	} else {
 		writeResponse(w, response.StatusOK)
 	}
