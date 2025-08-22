@@ -52,13 +52,12 @@ func GetDefaultHeaders(contentLen int) headers.Headers {
 	return headers
 }
 
-func (w *Writer) WriteHeaders(headers headers.Headers) error {
+func (w *Writer) WriteHeaders(h headers.Headers) error {
 	data := []byte{}
-	for key, value := range headers {
+	for key, value := range h {
 		data = fmt.Appendf(data, "%s: %s\r\n", strings.Title(key), value)
 	}
 	data = fmt.Appendf(data, "\r\n")
-
 	_, err := w.writer.Write(data)
 	if err != nil {
 		log.Printf("error writing headers: %v", err)
@@ -76,3 +75,4 @@ func (w *Writer) WriteBody(p []byte) (int, error) {
 	}
 	return n, nil
 }
+
